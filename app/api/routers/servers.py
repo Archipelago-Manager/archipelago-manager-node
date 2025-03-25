@@ -1,15 +1,26 @@
-from typing import Annotated, List
-from fastapi import APIRouter, Query, HTTPException
+import asyncio
+import requests
+from pydantic import HttpUrl, BaseModel
+from typing import Annotated, List, Union
+from fastapi import APIRouter, Query, HTTPException, BackgroundTasks
 from sqlmodel import select
 from app.api.deps import SessionDep
 from app.models.servers import (
         Server,
         ServerCreate,
         ServerPublic,
-        ServerCreateInternal
+        ServerCreateInternal,
+        ServerStateEnum
         )
+from app.api.callbacks import server_callback_router
 
 router = APIRouter(prefix="/servers", tags=["server"])
+
+
+class StartServerCBInfo(BaseModel):
+    hub_id: int
+    game_id: int
+    callback_url: HttpUrl
 
 
 @router.post("/", response_model=ServerPublic)
@@ -37,11 +48,38 @@ def read_servers(session: SessionDep,
 
 
 @router.get("/{server_id}", response_model=ServerPublic)
-def read_server(
-        server_id: int,
-        session: SessionDep,
-        ):
+def read_server(server_id: int, session: SessionDep):
     server = session.get(Server, server_id)
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
+    return server
+
+
+async def start_archipelago_server(server: Server, session: SessionDep,
+                                   callback_info: StartServerCBInfo):
+    await asyncio.sleep(3)  # Actually start server here
+    server.state = ServerStateEnum.running
+    session.add(server)
+    session.commit()
+    session.refresh(server)
+    callback_url = callback_info.callback_url
+    hub_id = callback_info.hub_id
+    game_id = callback_info.game_id
+    requests.post(f"{callback_url}/hubs/{hub_id}/games/{game_id}/started")
+
+
+@router.post("/{server_id}/start", response_model=ServerPublic,
+             callbacks=server_callback_router.routes)
+async def start_server(server_id, session: SessionDep,
+                       callback_info: StartServerCBInfo,
+                       background_tasks: BackgroundTasks):
+    server = session.get(Server, server_id)
+    server.state = ServerStateEnum.starting
+    session.add(server)
+    session.commit()
+    session.refresh(server)
+    background_tasks.add_task(start_archipelago_server,
+                              server, session,
+                              callback_info
+                              )
     return server

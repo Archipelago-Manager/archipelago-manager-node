@@ -16,14 +16,20 @@ class ServerStateEnum(IntEnum):
 # An archipelago server hosted on a node                                    #
 #############################################################################
 class ServerBase(SQLModel):
+    address: str | None = None
+    port: int | None = None
+
+
+class ServerCreate(SQLModel):
     pass
 
 
-class ServerCreate(ServerBase):
+class ServerCreateInternal(ServerBase):
     pass
 
 
 class ServerPublic(ServerBase):
+    id: int
     state: ServerStateEnum
 
 
@@ -32,3 +38,4 @@ class Server(ServerBase, table=True):
     state: ServerStateEnum = ServerStateEnum.initialized
     address: str | None = None
     port: int | None = None
+    process_id: int | None = None
