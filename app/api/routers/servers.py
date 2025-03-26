@@ -20,6 +20,7 @@ from app.models.servers import (
         ServerStateEnum
         )
 from app.api.callbacks import server_callback_router
+from app.servermanager import AsyncServer, server_managers, port_counter
 
 router = APIRouter(prefix="/servers", tags=["server"])
 
@@ -34,7 +35,8 @@ class StartServerCBInfo(BaseModel):
 def create_server(
         server: ServerCreate, session: SessionDep,
         ):
-    port = 40000  # Todo, get this from some common file
+    port = port_counter.next_port  # Todo, get this from some common file
+    port_counter.next_port += 1
     db_server = Server.model_validate(ServerCreateInternal(
         address="localhost",
         port=port
@@ -70,7 +72,7 @@ async def init_server(server_id: int, session: SessionDep,
                       ):
     server = session.get(Server, server_id)
     folder_str = f"arch_games_dev/{server.id}/"
-    if (Path(folder_str) / archipelago_file.filename).is_file and \
+    if (Path(folder_str) / "game.archipelago").is_file and \
             not overwrite:
         raise HTTPException(status_code=400,
                             detail=("Archipelago file already exists, "
@@ -78,7 +80,7 @@ async def init_server(server_id: int, session: SessionDep,
                                     "to overwrite")
                             )
     Path(folder_str).mkdir(parents=True, exist_ok=True)
-    with open(Path(folder_str) / archipelago_file.filename, "wb") as f:
+    with open(Path(folder_str) / "game.archipelago", "wb") as f:
         arch_content = await archipelago_file.read()
         f.write(arch_content)
     await archipelago_file.close()
@@ -92,16 +94,9 @@ async def init_server(server_id: int, session: SessionDep,
 async def start_archipelago_server(server: Server,
                                    session: SessionDep,
                                    callback_info: StartServerCBInfo):
-    folder_str = f"arch_games_dev/{server.id}/"
-    arch_file_path = Path(folder_str) / server.archipelago_file_name
-    print(arch_file_path.absolute())
-    sp = await asyncio.subprocess.create_subprocess_exec(
-            "ArchipelagoServer",
-            "--port", str(server.port),
-            arch_file_path.absolute(),
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            )
+    sm = AsyncServer(server.id, server.port)
+    server_managers.servers[server.id] = sm
+    await sm.start()
     server.state = ServerStateEnum.running
     session.add(server)
     session.commit()
@@ -109,10 +104,6 @@ async def start_archipelago_server(server: Server,
     callback_url = callback_info.callback_url
     hub_id = callback_info.hub_id
     game_id = callback_info.game_id
-    await asyncio.sleep(20)
-    text = await sp.stdout.read(1000)
-    print(text)
-    sp.kill()
     requests.post(f"{callback_url}/hubs/{hub_id}/games/{game_id}/started")
 
 
@@ -130,4 +121,16 @@ async def start_server(server_id, session: SessionDep,
                               server, session,
                               callback_info
                               )
+    return server
+
+
+@router.post("/{server_id}/stop", response_model=ServerPublic)
+async def stop_server(server_id, session: SessionDep):
+    server = session.get(Server, server_id)
+    sm = server_managers.servers[server.id]
+    await sm.stop()
+    server.state = ServerStateEnum.stopped
+    session.add(server)
+    session.commit()
+    session.refresh(server)
     return server
