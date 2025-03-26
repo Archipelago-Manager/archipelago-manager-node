@@ -1,8 +1,15 @@
 import asyncio
 import requests
+from pathlib import Path
 from pydantic import HttpUrl, BaseModel
-from typing import Annotated, List, Union
-from fastapi import APIRouter, Query, HTTPException, BackgroundTasks
+from typing import Annotated, List
+from fastapi import (
+        APIRouter,
+        Query,
+        HTTPException,
+        BackgroundTasks,
+        UploadFile
+        )
 from sqlmodel import select
 from app.api.deps import SessionDep
 from app.models.servers import (
@@ -55,8 +62,30 @@ def read_server(server_id: int, session: SessionDep):
     return server
 
 
-async def start_archipelago_server(server: Server, session: SessionDep,
+@router.post("/{server_id}/init", response_model=ServerPublic,
+             callbacks=server_callback_router.routes)
+async def init_server(server_id, session: SessionDep,
+                      archipelago_file: UploadFile):
+    server = session.get(Server, server_id)
+    arch_content = await archipelago_file.read()
+    folder_str = f"arch_games_dev/{server.id}/"
+    Path(folder_str).mkdir(parents=True, exist_ok=True)
+    with open(Path(folder_str) / archipelago_file.filename, "wb") as f:
+        arch_content = await archipelago_file.read()
+        f.write(arch_content)
+    await archipelago_file.close()
+    server.archipelago_file_name = archipelago_file.filename
+    session.add(server)
+    session.commit()
+    session.refresh(server)
+    return server
+
+
+async def start_archipelago_server(server: Server,
+                                   session: SessionDep,
                                    callback_info: StartServerCBInfo):
+    folder_str = f"arch_games_dev/{server.id}/"
+    arch_file_path = Path(folder_str) / server.archipelago_file_name
     await asyncio.sleep(3)  # Actually start server here
     server.state = ServerStateEnum.running
     session.add(server)

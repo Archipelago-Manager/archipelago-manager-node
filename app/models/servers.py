@@ -39,3 +39,4 @@ class Server(ServerBase, table=True):
     address: str | None = None
     port: int | None = None
     process_id: int | None = None
+    archipelago_file_name: str | None = None
