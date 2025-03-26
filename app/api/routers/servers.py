@@ -1,4 +1,3 @@
-import asyncio
 import requests
 from pathlib import Path
 from pydantic import HttpUrl, BaseModel

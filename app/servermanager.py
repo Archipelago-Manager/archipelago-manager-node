@@ -1,6 +1,12 @@
 import asyncio
+from typing import Callable
 from pathlib import Path
 from pydantic import BaseModel, ConfigDict
+
+
+class CallbackManager(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    callbacks: dict[str, Callable[[str], None]] = {}
 
 
 class AsyncServer():
@@ -12,15 +18,23 @@ class AsyncServer():
         self.read_task = None
         self.running = False
 
-    async def consume_lines(self, stdout: asyncio.StreamReader):
+        self.callback_manager = CallbackManager()
+
+    async def consume_lines(self):
+        stdout = self.subprocess.stdout
         async for line in stdout:
-            self.output_lines.append(line.decode("utf-8").strip())
-            print(self.output_lines[-1])
+            sanitized_line = line.decode("utf-8").strip()
+            for _, func in self.callback_manager.callbacks.items():
+                func(sanitized_line)
         else:
+            # When outout stops, the server has stopped
             self.running = False
 
+    def add_stdin_callback(self, name: str, func: callable):
+        self.callback_manager.callbacks[name] = func
+
     async def wait_for_shutdown(self):
-        # TODO: Make this throw exception
+        # TODO: Make this throw exception?
         for _ in range(10):  # 0.5 * 10 = 5s
             await asyncio.sleep(0.5)
             if not self.running:
@@ -37,9 +51,9 @@ class AsyncServer():
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 )
-        self.read_task = asyncio.create_task(
-                self.consume_lines(self.subprocess.stdout)
-                )
+        self.read_task = asyncio.create_task(self.consume_lines())
+        self.add_stdin_callback("print", print)
+        self.add_stdin_callback(lambda x: self.output_lines.append(x))
         self.running = True
 
     async def stop(self):
@@ -64,6 +78,6 @@ class PortCounter(BaseModel):
 
 server_managers = ServerManager(servers={})
 
-# TODO: Make this more refined, use a file, and some nice way of 
+# TODO: Make this more refined, use a file, and some nice way of
 # finding unused ports
 port_counter = PortCounter()
