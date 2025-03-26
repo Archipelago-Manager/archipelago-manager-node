@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict
 class CallbackManager(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     callbacks: dict[str, Callable[[str], None]] = {}
+    async_callbacks: dict[str, Callable[[str], None]] = {}
 
 
 class AsyncServer():
@@ -24,14 +25,26 @@ class AsyncServer():
         stdout = self.subprocess.stdout
         async for line in stdout:
             sanitized_line = line.decode("utf-8").strip()
+
+            # Sync callbacks
             for _, func in self.callback_manager.callbacks.items():
                 func(sanitized_line)
+
+            # Async callbacks
+            if len(self.callback_manager.async_callbacks) > 0:
+                coros = [func(sanitized_line) for _, func in
+                         self.callback_manager.async_callbacks.items()]
+                asyncio.gather(*coros)
+
         else:
             # When outout stops, the server has stopped
             self.running = False
 
     def add_stdin_callback(self, name: str, func: callable):
         self.callback_manager.callbacks[name] = func
+
+    def add_async_stdin_callback(self, name: str, func: callable):
+        self.callback_manager.async_callbacks[name] = func
 
     async def wait_for_shutdown(self):
         # TODO: Make this throw exception?
@@ -53,7 +66,8 @@ class AsyncServer():
                 )
         self.read_task = asyncio.create_task(self.consume_lines())
         self.add_stdin_callback("print", print)
-        self.add_stdin_callback(lambda x: self.output_lines.append(x))
+        self.add_stdin_callback("output",
+                                lambda x: self.output_lines.append(x))
         self.running = True
 
     async def stop(self):
