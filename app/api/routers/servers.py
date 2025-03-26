@@ -64,11 +64,19 @@ def read_server(server_id: int, session: SessionDep):
 
 @router.post("/{server_id}/init", response_model=ServerPublic,
              callbacks=server_callback_router.routes)
-async def init_server(server_id, session: SessionDep,
-                      archipelago_file: UploadFile):
+async def init_server(server_id: int, session: SessionDep,
+                      archipelago_file: UploadFile,
+                      overwrite: bool = False
+                      ):
     server = session.get(Server, server_id)
-    arch_content = await archipelago_file.read()
     folder_str = f"arch_games_dev/{server.id}/"
+    if (Path(folder_str) / archipelago_file.filename).is_file and \
+            not overwrite:
+        raise HTTPException(status_code=400,
+                            detail=("Archipelago file already exists, "
+                                    "rerun the command with overwrite=True "
+                                    "to overwrite")
+                            )
     Path(folder_str).mkdir(parents=True, exist_ok=True)
     with open(Path(folder_str) / archipelago_file.filename, "wb") as f:
         arch_content = await archipelago_file.read()
@@ -86,7 +94,14 @@ async def start_archipelago_server(server: Server,
                                    callback_info: StartServerCBInfo):
     folder_str = f"arch_games_dev/{server.id}/"
     arch_file_path = Path(folder_str) / server.archipelago_file_name
-    await asyncio.sleep(3)  # Actually start server here
+    print(arch_file_path.absolute())
+    sp = await asyncio.subprocess.create_subprocess_exec(
+            "ArchipelagoServer",
+            "--port", str(server.port),
+            arch_file_path.absolute(),
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            )
     server.state = ServerStateEnum.running
     session.add(server)
     session.commit()
@@ -94,6 +109,10 @@ async def start_archipelago_server(server: Server,
     callback_url = callback_info.callback_url
     hub_id = callback_info.hub_id
     game_id = callback_info.game_id
+    await asyncio.sleep(20)
+    text = await sp.stdout.read(1000)
+    print(text)
+    sp.kill()
     requests.post(f"{callback_url}/hubs/{hub_id}/games/{game_id}/started")
 
 
