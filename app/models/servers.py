@@ -47,6 +47,6 @@ class Server(ServerBase, table=True):
     state: ServerStateEnum = ServerStateEnum.created
     initialized: bool = False
     address: str | None = None
-    port: int | None = None
+    port: int | None = Field(default=None, index=True)
     process_id: int | None = None
     archipelago_file_name: str | None = None

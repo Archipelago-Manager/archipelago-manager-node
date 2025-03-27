@@ -21,7 +21,8 @@ from app.models.servers import (
         ServerNotInitializedException
         )
 from app.api.callbacks import server_callback_router
-from app.servermanager import AsyncServer, server_managers, port_counter
+from app.utils.asyncserver import AsyncServer
+from app.utils.server_utils import server_manager, port_handler
 
 router = APIRouter(prefix="/servers", tags=["server"])
 
@@ -36,8 +37,7 @@ class StartServerCBInfo(BaseModel):
 def create_server(
         server: ServerCreate, session: SessionDep,
         ):
-    port = port_counter.next_port  # Todo, get this from some common file
-    port_counter.next_port += 1
+    port = port_handler.get_new_port()
     db_server = Server.model_validate(ServerCreateInternal(
         address="localhost",
         port=port
@@ -46,8 +46,18 @@ def create_server(
     session.commit()
     session.refresh(db_server)
     sm = AsyncServer(db_server.id, db_server.port)
-    server_managers.servers[db_server.id] = sm
+    server_manager.servers[db_server.id] = sm
     return db_server
+
+
+@router.delete("/")
+def delete_server(server_id: int, session: SessionDep):
+    server = session.get(Server, server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+    session.delete(server)
+    session.commit()
+    return {"ok": True}
 
 
 @router.get("/", response_model=List[ServerPublic])
@@ -99,7 +109,7 @@ async def init_server(server_id: int, session: SessionDep,
 async def wait_start_archipelago_server(server: Server,
                                         session: SessionDep,
                                         callback_info: StartServerCBInfo):
-    sm = server_managers.servers[server.id]
+    sm = server_manager.servers[server.id]
     is_started = await sm.wait_for_startup()
     if is_started:
         server.state = ServerStateEnum.running
@@ -123,7 +133,7 @@ async def wait_start_archipelago_server(server: Server,
 async def start_server(server_id: int, session: SessionDep,
                        callback_info: StartServerCBInfo,
                        background_tasks: BackgroundTasks):
-    sm = server_managers.servers[server_id]
+    sm = server_manager.servers[server_id]
     server = session.get(Server, server_id)
     try:
         await sm.start()
@@ -156,7 +166,7 @@ async def start_server(server_id: int, session: SessionDep,
 @router.post("/{server_id}/stop", response_model=ServerPublic)
 async def stop_server(server_id, session: SessionDep):
     server = session.get(Server, server_id)
-    sm = server_managers.servers[server.id]
+    sm = server_manager.servers[server.id]
     try:
         await sm.stop()
     except ServerWrongStateException as e:

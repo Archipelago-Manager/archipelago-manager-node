@@ -169,20 +169,3 @@ class AsyncServer():
         else:
             print(f"Server with id {self.server_id} hung shutting down")
         return is_shut_down
-
-
-class ServerManager(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    servers: dict[int, AsyncServer]
-
-
-class PortCounter(BaseModel):
-    next_port: int = 40000
-
-
-server_managers = ServerManager(servers={})
-
-# TODO: Make this more refined, use a file, and some nice way of
-# finding unused ports
-port_counter = PortCounter()
