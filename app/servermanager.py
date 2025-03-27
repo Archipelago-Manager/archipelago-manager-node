@@ -21,6 +21,34 @@ class AsyncServer():
 
         self.callback_manager = CallbackManager()
 
+    def add_stdin_callback(self, name: str, func: callable):
+        self.callback_manager.callbacks[name] = func
+
+    def add_async_stdin_callback(self, name: str, func: callable):
+        self.callback_manager.async_callbacks[name] = func
+
+    def remove_stdin_callback(self, name: str):
+        try:
+            self.callback_manager.callbacks.pop(name)
+            return True
+        except KeyError:
+            return False
+
+    def remove_async_stdin_callback(self, name: str):
+        try:
+            self.callback_manager.async_callbacks.pop(name)
+            return True
+        except KeyError:
+            return False
+
+    def has_started_cb(self, x: str):
+        """
+        Checks string x, sets self.running to true if x starts
+        with 'server listening on '
+        """
+        if x.startswith("server listening"):
+            self.running = True
+
     async def consume_lines(self):
         stdout = self.subprocess.stdout
         async for line in stdout:
@@ -40,14 +68,14 @@ class AsyncServer():
             # When outout stops, the server has stopped
             self.running = False
 
-    def add_stdin_callback(self, name: str, func: callable):
-        self.callback_manager.callbacks[name] = func
-
-    def add_async_stdin_callback(self, name: str, func: callable):
-        self.callback_manager.async_callbacks[name] = func
+    async def wait_for_startup(self):
+        for _ in range(10):  # 0.5 * 10 = 5s
+            await asyncio.sleep(0.5)
+            if self.running:
+                return True
+        return False
 
     async def wait_for_shutdown(self):
-        # TODO: Make this throw exception?
         for _ in range(10):  # 0.5 * 10 = 5s
             await asyncio.sleep(0.5)
             if not self.running:
@@ -68,16 +96,21 @@ class AsyncServer():
         self.add_stdin_callback("print", print)
         self.add_stdin_callback("output",
                                 lambda x: self.output_lines.append(x))
-        self.running = True
+        self.add_stdin_callback("start_cb", self.has_started_cb)
+        is_started = await self.wait_for_startup()
+        self.remove_stdin_callback("start_cb")
+        self.running = is_started
+        return is_started
 
     async def stop(self):
         self.subprocess.stdin.write(str.encode("/exit\n"))
         await self.subprocess.stdin.drain()
-        isShutDown = await self.wait_for_shutdown()
-        if isShutDown:
+        is_shut_down = await self.wait_for_shutdown()
+        if is_shut_down:
             print("Server shut down")
         else:
             print("Server hung shutting down")
+        return is_shut_down
 
 
 class ServerManager(BaseModel):
