@@ -2,6 +2,13 @@ import asyncio
 from typing import Callable
 from pathlib import Path
 from pydantic import BaseModel, ConfigDict
+from app.models.servers import (
+        Server,
+        ServerStateEnum,
+        ServerWrongStateException,
+        ServerNotInitializedException
+        )
+from app.db import get_session
 
 
 class CallbackManager(BaseModel):
@@ -17,9 +24,30 @@ class AsyncServer():
         self.subprocess = None
         self.output_lines = []
         self.read_task = None
+
         self.running = False
 
         self.callback_manager = CallbackManager()
+
+    def get_is_initilized(self) -> bool:
+        session = next(get_session())
+        db_server = session.get(Server, self.server_id)
+        session.close()
+        return db_server.initialized
+
+    def get_state(self) -> ServerStateEnum:
+        session = next(get_session())
+        db_server = session.get(Server, self.server_id)
+        session.close()
+        return db_server.state
+
+    def set_state(self, state: ServerStateEnum) -> None:
+        session = next(get_session())
+        db_server = session.get(Server, self.server_id)
+        db_server.state = state
+        session.add(db_server)
+        session.commit()
+        session.close()
 
     def add_stdin_callback(self, name: str, func: callable):
         self.callback_manager.callbacks[name] = func
@@ -72,7 +100,9 @@ class AsyncServer():
         for _ in range(10):  # 0.5 * 10 = 5s
             await asyncio.sleep(0.5)
             if self.running:
+                self.remove_stdin_callback("start_cb")
                 return True
+        self.remove_stdin_callback("start_cb")
         return False
 
     async def wait_for_shutdown(self):
@@ -82,7 +112,22 @@ class AsyncServer():
                 return True
         return False
 
-    async def start(self):
+    async def start(self, is_restart=False):
+        db_state = self.get_state()
+        if not is_restart:
+            if not self.get_is_initilized():
+                raise ServerNotInitializedException(
+                        "Server not initialized"
+                        )
+            if db_state not in [
+                    ServerStateEnum.created,
+                    ServerStateEnum.stopped,
+                    ServerStateEnum.failed
+                    ]:
+                raise ServerWrongStateException(
+                        f"Not in a startable state, current state: {db_state}"
+                        )
+        self.set_state(ServerStateEnum.starting)
         folder_str = f"arch_games_dev/{self.server_id}/"
         arch_file_path = Path(folder_str) / "game.archipelago"
         self.subprocess = await asyncio.subprocess.create_subprocess_exec(
@@ -97,19 +142,32 @@ class AsyncServer():
         self.add_stdin_callback("output",
                                 lambda x: self.output_lines.append(x))
         self.add_stdin_callback("start_cb", self.has_started_cb)
-        is_started = await self.wait_for_startup()
-        self.remove_stdin_callback("start_cb")
-        self.running = is_started
+
+    async def start_wait(self, is_restart=False):
+        try:
+            await self.start(is_restart)
+            is_started = await self.wait_for_startup()
+            self.set_state(ServerStateEnum.running)
+        except Exception as e:
+            is_started = False
+            self.set_state(ServerStateEnum.failed)
+            print(e)
         return is_started
 
     async def stop(self):
+        db_state = self.get_state()
+        if db_state is not ServerStateEnum.running:
+            raise ServerWrongStateException((
+                "Not in a stoppable state (not running), "
+                f"current state: {db_state}"
+                ))
         self.subprocess.stdin.write(str.encode("/exit\n"))
         await self.subprocess.stdin.drain()
         is_shut_down = await self.wait_for_shutdown()
         if is_shut_down:
-            print("Server shut down")
+            print(f"Server with id {self.server_id} shut down")
         else:
-            print("Server hung shutting down")
+            print(f"Server with id {self.server_id} hung shutting down")
         return is_shut_down
 
 

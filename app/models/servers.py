@@ -1,12 +1,21 @@
-from enum import IntEnum
+from enum import Enum
 from sqlmodel import SQLModel, Field
 
 
-class ServerStateEnum(IntEnum):
-    initialized = 0
-    starting = 1
-    running = 2
-    stopped = 3
+class ServerStateEnum(str, Enum):
+    created = "created"
+    starting = "starting"
+    running = "running"
+    stopped = "stopped"
+    failed = "failed"
+
+
+class ServerWrongStateException(Exception):
+    pass
+
+
+class ServerNotInitializedException(Exception):
+    pass
 
 
 #############################################################################
@@ -30,11 +39,13 @@ class ServerCreateInternal(ServerBase):
 class ServerPublic(ServerBase):
     id: int
     state: ServerStateEnum
+    initialized: bool
 
 
 class Server(ServerBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    state: ServerStateEnum = ServerStateEnum.initialized
+    state: ServerStateEnum = ServerStateEnum.created
+    initialized: bool = False
     address: str | None = None
     port: int | None = None
     process_id: int | None = None

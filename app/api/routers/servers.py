@@ -16,7 +16,9 @@ from app.models.servers import (
         ServerCreate,
         ServerPublic,
         ServerCreateInternal,
-        ServerStateEnum
+        ServerStateEnum,
+        ServerWrongStateException,
+        ServerNotInitializedException
         )
 from app.api.callbacks import server_callback_router
 from app.servermanager import AsyncServer, server_managers, port_counter
@@ -43,6 +45,8 @@ def create_server(
     session.add(db_server)
     session.commit()
     session.refresh(db_server)
+    sm = AsyncServer(db_server.id, db_server.port)
+    server_managers.servers[db_server.id] = sm
     return db_server
 
 
@@ -79,44 +83,70 @@ async def init_server(server_id: int, session: SessionDep,
                                     "to overwrite")
                             )
     Path(folder_str).mkdir(parents=True, exist_ok=True)
+    # TODO: Make into aiofiles?
     with open(Path(folder_str) / "game.archipelago", "wb") as f:
         arch_content = await archipelago_file.read()
         f.write(arch_content)
     await archipelago_file.close()
     server.archipelago_file_name = archipelago_file.filename
+    server.initialized = True
     session.add(server)
     session.commit()
     session.refresh(server)
     return server
 
 
-async def start_archipelago_server(server: Server,
-                                   session: SessionDep,
-                                   callback_info: StartServerCBInfo):
-    sm = AsyncServer(server.id, server.port)
-    server_managers.servers[server.id] = sm
-    await sm.start()
-    server.state = ServerStateEnum.running
+async def wait_start_archipelago_server(server: Server,
+                                        session: SessionDep,
+                                        callback_info: StartServerCBInfo):
+    sm = server_managers.servers[server.id]
+    is_started = await sm.wait_for_startup()
+    if is_started:
+        server.state = ServerStateEnum.running
+    else:
+        server.state = ServerStateEnum.failed
     session.add(server)
     session.commit()
     session.refresh(server)
     callback_url = callback_info.callback_url
     hub_id = callback_info.hub_id
     game_id = callback_info.game_id
-    requests.post(f"{callback_url}/hubs/{hub_id}/games/{game_id}/started")
+    body = {"state": server.state}
+    requests.post(
+            f"{callback_url}/hubs/{hub_id}/games/{game_id}/started",
+            json=body
+            )
 
 
 @router.post("/{server_id}/start", response_model=ServerPublic,
              callbacks=server_callback_router.routes)
-async def start_server(server_id, session: SessionDep,
+async def start_server(server_id: int, session: SessionDep,
                        callback_info: StartServerCBInfo,
                        background_tasks: BackgroundTasks):
+    sm = server_managers.servers[server_id]
     server = session.get(Server, server_id)
+    try:
+        await sm.start()
+    except ServerWrongStateException as e:
+        server.state = ServerStateEnum.failed
+        session.add(server)
+        session.commit()
+        raise HTTPException(status_code=400, detail=str(e))
+    except ServerNotInitializedException:
+        server.state = ServerStateEnum.failed
+        session.add(server)
+        session.commit()
+        raise HTTPException(status_code=400,
+                            detail=("Server is not initialized, "
+                                    "call /server/{server_id}/init to "
+                                    "initialize."
+                                    )
+                            )
     server.state = ServerStateEnum.starting
     session.add(server)
     session.commit()
     session.refresh(server)
-    background_tasks.add_task(start_archipelago_server,
+    background_tasks.add_task(wait_start_archipelago_server,
                               server, session,
                               callback_info
                               )
@@ -127,7 +157,13 @@ async def start_server(server_id, session: SessionDep,
 async def stop_server(server_id, session: SessionDep):
     server = session.get(Server, server_id)
     sm = server_managers.servers[server.id]
-    await sm.stop()
+    try:
+        await sm.stop()
+    except ServerWrongStateException as e:
+        server.state = ServerStateEnum.failed
+        session.add(server)
+        session.commit()
+        raise HTTPException(status_code=400, detail=str(e))
     server.state = ServerStateEnum.stopped
     session.add(server)
     session.commit()
