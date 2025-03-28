@@ -11,10 +11,16 @@ from app.models.servers import (
 from app.db import get_session
 
 
+class ProcessNotRunningException(Exception):
+    pass
+
+
 class CallbackManager(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     callbacks: dict[str, Callable[[str], None]] = {}
     async_callbacks: dict[str, Callable[[str], None]] = {}
+    callbacks_err: dict[str, Callable[[str], None]] = {}
+    async_callbacks_err: dict[str, Callable[[str], None]] = {}
 
 
 class AsyncServer():
@@ -24,6 +30,7 @@ class AsyncServer():
         self.subprocess = None
         self.output_lines = []
         self.read_task = None
+        self.err_task = None
 
         self.running = False
 
@@ -51,6 +58,9 @@ class AsyncServer():
 
     def add_stdin_callback(self, name: str, func: callable):
         self.callback_manager.callbacks[name] = func
+
+    def add_stderr_callback(self, name: str, func: callable):
+        self.callback_manager.callbacks_err[name] = func
 
     def add_async_stdin_callback(self, name: str, func: callable):
         self.callback_manager.async_callbacks[name] = func
@@ -90,6 +100,25 @@ class AsyncServer():
             if len(self.callback_manager.async_callbacks) > 0:
                 coros = [func(sanitized_line) for _, func in
                          self.callback_manager.async_callbacks.items()]
+                asyncio.gather(*coros)
+
+        else:
+            # When outout stops, the server has stopped
+            self.running = False
+
+    async def consume_errors(self):
+        stderr = self.subprocess.stderr
+        async for line in stderr:
+            sanitized_line = line.decode("utf-8").strip()
+
+            # Sync callbacks
+            for _, func in self.callback_manager.callbacks_err.items():
+                func(sanitized_line)
+
+            # Async callbacks
+            if len(self.callback_manager.async_callbacks_err) > 0:
+                coros = [func(sanitized_line) for _, func in
+                         self.callback_manager.async_callbacks_err.items()]
                 asyncio.gather(*coros)
 
         else:
@@ -138,7 +167,9 @@ class AsyncServer():
                 stdout=asyncio.subprocess.PIPE,
                 )
         self.read_task = asyncio.create_task(self.consume_lines())
+        self.err_task = asyncio.create_task(self.consume_errors())
         self.add_stdin_callback("print", print)
+        self.add_stderr_callback("print", print)
         self.add_stdin_callback("output",
                                 lambda x: self.output_lines.append(x))
         self.add_stdin_callback("start_cb", self.has_started_cb)
@@ -169,3 +200,10 @@ class AsyncServer():
         else:
             print(f"Server with id {self.server_id} hung shutting down")
         return is_shut_down
+
+    async def send_cmd(self, cmd: str):
+        if not self.subprocess:
+            raise ProcessNotRunningException("The process is not running, "
+                                             "cannot send cmd")
+        self.subprocess.stdin.write(str.encode(cmd+"\n"))
+        await self.subprocess.stdin.drain()

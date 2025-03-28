@@ -21,7 +21,7 @@ from app.models.servers import (
         ServerNotInitializedException
         )
 from app.api.callbacks import server_callback_router
-from app.utils.asyncserver import AsyncServer
+from app.utils.asyncserver import AsyncServer, ProcessNotRunningException
 from app.utils.server_utils import server_manager, port_handler
 
 router = APIRouter(prefix="/servers", tags=["server"])
@@ -31,6 +31,10 @@ class StartServerCBInfo(BaseModel):
     hub_id: int
     game_id: int
     callback_url: HttpUrl
+
+
+class SendCmdBody(BaseModel):
+    cmd: str
 
 
 @router.post("/", response_model=ServerPublic)
@@ -179,3 +183,13 @@ async def stop_server(server_id, session: SessionDep):
     session.commit()
     session.refresh(server)
     return server
+
+
+@router.post("/{server_id}/send_cmd")
+async def send_cmd_to_sever(server_id, session: SessionDep, cmd: SendCmdBody):
+    server = session.get(Server, server_id)
+    sm = server_manager.servers[server.id]
+    try:
+        await sm.send_cmd(cmd.cmd)
+    except ProcessNotRunningException as e:
+        raise HTTPException(status_code=400, detail=str(e))
