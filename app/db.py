@@ -1,10 +1,10 @@
 from sqlmodel import create_engine, SQLModel, Session
+from app.core.config import settings
 
-sqlite_file_name = "database_test.db"
-sqlite_url = f"sqlite:///{sqlite_file_name}"
-
-connect_args = {"check_same_thread": False}
-engine = create_engine(sqlite_url, connect_args=connect_args)
+if settings.DB_BACKEND == "sqlite":
+    connect_args = {"check_same_thread": False}
+    engine = create_engine(str(settings.SQLALCHEMY_DATABASE_URI),
+                           connect_args=connect_args)
 
 
 def create_db_and_tables():
