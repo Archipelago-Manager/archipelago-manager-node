@@ -20,5 +20,5 @@ coverage.xml
 .hypothesis
 env/
 
-database_test.db
+*.db
 arch_games_dev/

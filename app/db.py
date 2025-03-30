@@ -1,4 +1,4 @@
-from sqlmodel import create_engine, SQLModel, Session
+from sqlmodel import create_engine, Session
 from app.core.config import settings
 
 if settings.DB_BACKEND == "sqlite":
@@ -8,7 +8,8 @@ if settings.DB_BACKEND == "sqlite":
 
 
 def create_db_and_tables():
-    SQLModel.metadata.create_all(engine)
+    # SQLModel.metadata.create_all(engine)
+    pass
 
 
 def get_session():
