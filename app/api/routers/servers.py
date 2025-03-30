@@ -89,7 +89,7 @@ async def init_server(server_id: int, session: SessionDep,
                       ):
     server = session.get(Server, server_id)
     folder_str = f"arch_games_dev/{server.id}/"
-    if (Path(folder_str) / "game.archipelago").is_file and \
+    if (Path(folder_str) / "game.archipelago").is_file() and \
             not overwrite:
         raise HTTPException(status_code=400,
                             detail=("Archipelago file already exists, "
