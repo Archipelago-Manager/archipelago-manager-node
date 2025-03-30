@@ -168,8 +168,8 @@ class AsyncServer():
                 )
         self.read_task = asyncio.create_task(self.consume_lines())
         self.err_task = asyncio.create_task(self.consume_errors())
+
         self.add_stdin_callback("print", print)
-        self.add_stderr_callback("print", print)
         self.add_stdin_callback("output",
                                 lambda x: self.output_lines.append(x))
         self.add_stdin_callback("start_cb", self.has_started_cb)
