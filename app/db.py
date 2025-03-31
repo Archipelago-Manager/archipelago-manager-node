@@ -1,5 +1,14 @@
+import logging
+
 from sqlmodel import create_engine, Session
+from alembic.config import Config
+from alembic import command
 from app.core.config import settings
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 if settings.DB_BACKEND == "sqlite":
     connect_args = {"check_same_thread": False}
@@ -8,8 +17,12 @@ if settings.DB_BACKEND == "sqlite":
 
 
 def create_db_and_tables():
+    logger.info("Initilizing DB (running migrations)")
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "head")
+    logger.info("Initilizing DB finished")
+
     # SQLModel.metadata.create_all(engine)
-    pass
 
 
 def get_session():
