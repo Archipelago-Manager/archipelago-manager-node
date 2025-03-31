@@ -1,4 +1,5 @@
 import asyncio
+import signal
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
@@ -40,6 +41,12 @@ async def stop_running_servers():
         await asyncio.gather(*stop_coros)
 
 
+async def stop_server():
+    await stop_running_servers()
+    asyncio.get_event_loop().stop()
+
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
@@ -48,6 +55,17 @@ async def lifespan(app: FastAPI):
     yield
     await stop_running_servers()
 
+
+def setup_graceful_stopping():
+    loop = asyncio.get_event_loop()
+    for signame in ('SIGINT', 'SIGTERM'):
+        loop.add_signal_handler(
+                getattr(signal, signame),
+                lambda: asyncio.create_task(stop_server())
+                )
+
+
+setup_graceful_stopping()
 app = FastAPI(lifespan=lifespan)
 
 app.include_router(servers.router)

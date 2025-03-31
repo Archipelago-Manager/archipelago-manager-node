@@ -79,6 +79,13 @@ class AsyncServer():
         except KeyError:
             return False
 
+    def remove_stderr_callback(self, name: str):
+        try:
+            self.callback_manager.callbacks_err.pop(name)
+            return True
+        except KeyError:
+            return False
+
     def has_started_cb(self, x: str):
         """
         Checks string x, sets self.running to true if x starts
@@ -105,6 +112,7 @@ class AsyncServer():
         else:
             # When outout stops, the server has stopped
             self.running = False
+            self.subprocess = None
 
     async def consume_errors(self):
         stderr = self.subprocess.stderr
@@ -120,10 +128,6 @@ class AsyncServer():
                 coros = [func(sanitized_line) for _, func in
                          self.callback_manager.async_callbacks_err.items()]
                 asyncio.gather(*coros)
-
-        else:
-            # When outout stops, the server has stopped
-            self.running = False
 
     async def wait_for_startup(self):
         for _ in range(10):  # 0.5 * 10 = 5s
