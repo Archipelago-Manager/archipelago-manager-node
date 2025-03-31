@@ -21,7 +21,6 @@ def create_db_and_tables():
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "head")
     logger.info("Initilizing DB finished")
-
     # SQLModel.metadata.create_all(engine)
 
 

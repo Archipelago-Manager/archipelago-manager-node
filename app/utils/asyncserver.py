@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Callable
 from pathlib import Path
 from pydantic import BaseModel, ConfigDict
@@ -9,6 +10,10 @@ from app.models.servers import (
         ServerNotInitializedException
         )
 from app.db import get_session
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class ProcessNotRunningException(Exception):
@@ -32,6 +37,7 @@ class AsyncServer():
         self.read_task = None
         self.err_task = None
 
+        self.starting = False
         self.running = False
 
         self.callback_manager = CallbackManager()
@@ -93,6 +99,7 @@ class AsyncServer():
         """
         if x.startswith("server listening"):
             self.running = True
+            self.starting = False
 
     async def consume_lines(self):
         stdout = self.subprocess.stdout
@@ -112,6 +119,7 @@ class AsyncServer():
         else:
             # When outout stops, the server has stopped
             self.running = False
+            self.starting = False
             self.subprocess = None
 
     async def consume_errors(self):
@@ -141,7 +149,7 @@ class AsyncServer():
     async def wait_for_shutdown(self):
         for _ in range(10):  # 0.5 * 10 = 5s
             await asyncio.sleep(0.5)
-            if not self.running:
+            if not self.running and not self.starting:
                 return True
         return False
 
@@ -161,6 +169,7 @@ class AsyncServer():
                         f"Not in a startable state, current state: {db_state}"
                         )
         self.set_state(ServerStateEnum.starting)
+        self.starting = True
         folder_str = f"arch_games_dev/{self.server_id}/"
         arch_file_path = Path(folder_str) / "game.archipelago"
         self.subprocess = await asyncio.subprocess.create_subprocess_exec(
@@ -196,13 +205,14 @@ class AsyncServer():
                 "Not in a stoppable state (not running), "
                 f"current state: {db_state}"
                 ))
+        print(f"A-Server with id {self.server_id} shutting")
         self.subprocess.stdin.write(str.encode("/exit\n"))
         await self.subprocess.stdin.drain()
         is_shut_down = await self.wait_for_shutdown()
         if is_shut_down:
-            print(f"Server with id {self.server_id} shut down")
+            print(f"A-Server with id {self.server_id} shut down")
         else:
-            print(f"Server with id {self.server_id} hung shutting down")
+            print(f"A-Server with id {self.server_id} hung shutting down")
         return is_shut_down
 
     async def send_cmd(self, cmd: str):
