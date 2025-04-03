@@ -52,7 +52,7 @@ def create_server(session: SessionDep):
     return db_server
 
 
-@router.delete("/")
+@router.delete("/{server_id}")
 def delete_server(server_id: int, session: SessionDep):
     server = session.get(Server, server_id)
     if not server:
