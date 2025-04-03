@@ -3,7 +3,7 @@ A server node running several [Archipelago](https://github.com/ArchipelagoMW/Arc
 Communicates with, and is separated from [Archipelago-Manager/archipelago-manager-backend](https://github.com/Archipelago-Manager/archipelago-manager-backend) because it will be more resource intensive and is made to be separatedly scalable.
 It is made to be called from the [archipelago-manager-backend](https://github.com/Archipelago-Manager/archipelago-manager-backend) but could theoretically be used stand-alone.
 
-### The node has the following features:
+### The node has(/will have) the following features:
   - [FastAPI](https://github.com/fastapi/fastapi) API that can create, start, stop, send, read commmands, etc. from Archipelago servers
   - Automatic leveraging of open ports, defined using environment variables
 
