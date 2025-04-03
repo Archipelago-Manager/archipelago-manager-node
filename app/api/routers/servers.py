@@ -13,7 +13,6 @@ from sqlmodel import select
 from app.api.deps import SessionDep
 from app.models.servers import (
         Server,
-        ServerCreate,
         ServerPublic,
         ServerCreateInternal,
         ServerStateEnum,

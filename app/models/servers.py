@@ -28,10 +28,6 @@ class ServerBase(SQLModel):
     port: int | None = None
 
 
-class ServerCreate(SQLModel):
-    pass
-
-
 class ServerCreateInternal(ServerBase):
     pass
 
