@@ -38,9 +38,7 @@ class SendCmdBody(BaseModel):
 
 
 @router.post("/", response_model=ServerPublic)
-def create_server(
-        server: ServerCreate, session: SessionDep,
-        ):
+def create_server(session: SessionDep):
     port = port_handler.get_new_port()
     db_server = Server.model_validate(ServerCreateInternal(
         address="localhost",
