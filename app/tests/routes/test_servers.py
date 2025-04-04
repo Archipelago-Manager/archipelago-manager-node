@@ -37,7 +37,7 @@ def test_read_servers(client: TestClient, session: Session):
     assert data[1]["id"] == server2.id
 
 
-def test_delete_servers(client: TestClient, session: Session):
+def test_delete_server(client: TestClient, session: Session):
     server = create_random_server(session)
     response = client.delete(f"/servers/{server.id}")
 
@@ -48,6 +48,15 @@ def test_delete_servers(client: TestClient, session: Session):
             select(Server).where(Server.id == server.id)
             ).first()
     assert db_server is None
+
+
+def test_delete_server_not_found(client: TestClient, session: Session):
+    server = create_random_server(session)
+    response = client.delete(f"/servers/{server.id+1}")
+    data = response.json()
+
+    assert response.status_code == 404
+    assert data['detail'] == 'Server not found'
 
 
 def test_read_server(client: TestClient, session: Session):
@@ -61,6 +70,15 @@ def test_read_server(client: TestClient, session: Session):
     assert data["id"] is not None
     assert data["state"] == ServerStateEnum.created
     assert data["initialized"] is False
+
+
+def test_read_server_not_found(client: TestClient, session: Session):
+    server = create_random_server(session)
+    response = client.get(f"/servers/{server.id+1}")
+    data = response.json()
+
+    assert response.status_code == 404
+    assert data['detail'] == 'Server not found'
 
 
 def test_init_server(client: TestClient, session: Session):
@@ -77,6 +95,20 @@ def test_init_server(client: TestClient, session: Session):
     assert data["id"] is not None
     assert data["state"] == ServerStateEnum.created
     assert data["initialized"] is True
+
+
+def test_init_server_file_already_exists(client: TestClient, session: Session):
+    server = create_random_initted_server(session)
+    with open('test_files/test.archipelago', 'rb') as f:
+        file_j = {'archipelago_file': f}
+        response = client.post(f"/servers/{server.id}/init/",
+                               files=file_j)
+        data = response.json()
+
+    assert response.status_code == 400
+    assert data["detail"] == ("Archipelago file already exists, "
+                              "rerun the command with overwrite=True "
+                              "to overwrite")
 
 
 @pytest.mark.asyncio()
@@ -99,8 +131,45 @@ async def test_start_server(client_teardown: TestClient, session: Session,
             }
     response = client_teardown.post(f"/servers/{server.id}/start", json=body)
     data = response.json()
+    assert response.status_code == 200
     assert data["state"] == ServerStateEnum.starting
     assert data["initialized"] is True
 
     started = await server_manager.servers[server.id].wait_for_startup()
     assert started is True
+
+
+@pytest.mark.asyncio()
+async def test_start_server_already_started(client_teardown: TestClient,
+                                            session: Session):
+    server = create_random_initted_server(session)
+
+    _ = await server_manager.servers[server.id].start_wait()
+
+    body = {
+            "callback_url": "http://localhost/test",
+            "hub_id": 0,
+            "game_id": 0,
+            }
+    response = client_teardown.post(f"/servers/{server.id}/start", json=body)
+    data = response.json()
+    assert response.status_code == 400
+    assert data["detail"] == "Not in a startable state, current state: running"
+
+
+@pytest.mark.asyncio()
+async def test_start_server_not_initialized(client_teardown: TestClient,
+                                            session: Session):
+    server = create_random_server(session)
+
+    body = {
+            "callback_url": "http://localhost/test",
+            "hub_id": 0,
+            "game_id": 0,
+            }
+    response = client_teardown.post(f"/servers/{server.id}/start", json=body)
+    data = response.json()
+    assert response.status_code == 400
+    assert data["detail"] == ("Server is not initialized, "
+                              "call /server/{server_id}/init to "
+                              "initialize.")

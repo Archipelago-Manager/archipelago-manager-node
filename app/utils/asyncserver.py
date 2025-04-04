@@ -122,6 +122,8 @@ class AsyncServer():
 
         else:
             # When outout stops, the server has stopped
+            if not self.err_task.done():
+                await self.err_task
             self.running = False
             self.starting = False
             self.subprocess = None
@@ -140,6 +142,9 @@ class AsyncServer():
                 coros = [func(sanitized_line) for _, func in
                          self.callback_manager.async_callbacks_err.items()]
                 asyncio.gather(*coros)
+        else:
+            if not self.read_task.done():
+                await self.read_task
 
     async def wait_for_startup(self):
         for _ in range(10):  # 0.5 * 10 = 5s
@@ -151,7 +156,7 @@ class AsyncServer():
         return False
 
     async def wait_for_shutdown(self):
-        for _ in range(10):  # 0.5 * 10 = 5s
+        for _ in range(20):  # 0.5 * 20 = 10s
             await asyncio.sleep(0.5)
             if not self.running and not self.starting:
                 return True
@@ -196,15 +201,18 @@ class AsyncServer():
             await self.start(is_restart)
             is_started = await self.wait_for_startup()
             self.set_state(ServerStateEnum.running)
-        except Exception as e:
+        except ServerNotInitializedException as e:
             is_started = False
             self.set_state(ServerStateEnum.failed)
+            print(e)
+        except ServerWrongStateException as e:
+            is_started = False
             print(e)
         return is_started
 
     async def stop(self):
         db_state = self.get_state()
-        if db_state is not ServerStateEnum.running:
+        if not self.running:
             raise ServerWrongStateException((
                 "Not in a stoppable state (not running), "
                 f"current state: {db_state}"

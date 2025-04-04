@@ -138,9 +138,6 @@ async def start_server(server_id: int, session: SessionDep,
     try:
         await sm.start()
     except ServerWrongStateException as e:
-        server.state = ServerStateEnum.failed
-        session.add(server)
-        session.commit()
         raise HTTPException(status_code=400, detail=str(e))
     except ServerNotInitializedException:
         server.state = ServerStateEnum.failed

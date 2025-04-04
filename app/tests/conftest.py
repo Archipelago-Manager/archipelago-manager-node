@@ -26,9 +26,6 @@ def session_fixture():
 
 @pytest.fixture(name="client")
 def client_fixture(session: Session):
-    def get_session_override():
-        return session
-
     client = TestClient(app)
     yield client
     server_manager.servers = {}  # Reset server_manager
@@ -36,9 +33,6 @@ def client_fixture(session: Session):
 
 @pytest.fixture(name="client_teardown")
 def client_teardown_fixture(session: Session):
-    def get_session_override():
-        return session
-
     with TestClient(app) as client:
         yield client
     server_manager.servers = {}  # Reset server_manager
