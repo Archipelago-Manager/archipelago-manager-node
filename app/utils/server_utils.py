@@ -1,7 +1,7 @@
 from pydantic import BaseModel, ConfigDict
 from sqlmodel import select
 from app.models.servers import Server
-from app.db import get_session
+from app.db import session_handler
 from app.utils.asyncserver import AsyncServer
 from app.core.config import settings
 
@@ -14,7 +14,7 @@ class ServerManager(BaseModel):
 
 class PortHandler():
     def get_new_port(self) -> int:
-        session = next(get_session())
+        session = next(session_handler.get_session())
         # Using where on port forces index to be sorted
         statement = select(Server).where(
                 Server.port > settings.ARCHIPELAGO_PORT_START-1

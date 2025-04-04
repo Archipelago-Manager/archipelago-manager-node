@@ -9,7 +9,7 @@ from app.models.servers import (
         ServerWrongStateException,
         ServerNotInitializedException
         )
-from app.db import get_session
+from app.db import session_handler
 
 
 logging.basicConfig(level=logging.INFO)
@@ -43,19 +43,19 @@ class AsyncServer():
         self.callback_manager = CallbackManager()
 
     def get_is_initilized(self) -> bool:
-        session = next(get_session())
+        session = next(session_handler.get_session())
         db_server = session.get(Server, self.server_id)
         session.close()
         return db_server.initialized
 
     def get_state(self) -> ServerStateEnum:
-        session = next(get_session())
+        session = next(session_handler.get_session())
         db_server = session.get(Server, self.server_id)
         session.close()
         return db_server.state
 
     def set_state(self, state: ServerStateEnum) -> None:
-        session = next(get_session())
+        session = next(session_handler.get_session())
         db_server = session.get(Server, self.server_id)
         db_server.state = state
         session.add(db_server)

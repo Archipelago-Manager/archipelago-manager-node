@@ -1,6 +1,6 @@
 import logging
-
 from sqlmodel import create_engine, Session
+from sqlalchemy import Engine
 from alembic.config import Config
 from alembic import command
 from app.core.config import settings
@@ -24,6 +24,16 @@ def create_db_and_tables():
     # SQLModel.metadata.create_all(engine)
 
 
-def get_session():
-    with Session(engine) as session:
-        yield session
+class SessionHandler():
+    def __init__(self, engine: Engine):
+        self.engine = engine
+
+    def get_session(self) -> Session:
+        with Session(self.engine) as session:
+            yield session
+
+    def set_engine(self, engine: Engine):
+        self.engine = engine
+
+
+session_handler = SessionHandler(engine)
