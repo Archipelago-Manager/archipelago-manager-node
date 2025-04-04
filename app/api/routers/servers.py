@@ -1,4 +1,4 @@
-import requests
+import httpx
 from pathlib import Path
 from pydantic import HttpUrl, BaseModel
 from typing import Annotated, List
@@ -78,8 +78,7 @@ def read_server(server_id: int, session: SessionDep):
     return server
 
 
-@router.post("/{server_id}/init", response_model=ServerPublic,
-             callbacks=server_callback_router.routes)
+@router.post("/{server_id}/init", response_model=ServerPublic)
 async def init_server(server_id: int, session: SessionDep,
                       archipelago_file: UploadFile,
                       overwrite: bool = False
@@ -123,7 +122,7 @@ async def wait_start_archipelago_server(server: Server,
     hub_id = callback_info.hub_id
     game_id = callback_info.game_id
     body = {"state": server.state}
-    requests.post(
+    _ = httpx.post(
             f"{callback_url}/hubs/{hub_id}/games/{game_id}/started",
             json=body
             )

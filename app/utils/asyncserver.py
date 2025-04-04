@@ -42,6 +42,10 @@ class AsyncServer():
 
         self.callback_manager = CallbackManager()
 
+    def __str__(self):
+        return (f"{self.server_id}:{self.port} - starting: "
+                "{self.starting}; running: {self.running}")
+
     def get_is_initilized(self) -> bool:
         session = next(session_handler.get_session())
         db_server = session.get(Server, self.server_id)
