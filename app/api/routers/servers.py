@@ -133,8 +133,10 @@ async def wait_start_archipelago_server(server: Server,
 async def start_server(server_id: int, session: SessionDep,
                        callback_info: StartServerCBInfo,
                        background_tasks: BackgroundTasks):
-    sm = server_manager.servers[server_id]
     server = session.get(Server, server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+    sm = server_manager.servers[server_id]
     try:
         await sm.start()
     except ServerWrongStateException as e:
@@ -163,13 +165,12 @@ async def start_server(server_id: int, session: SessionDep,
 @router.post("/{server_id}/stop", response_model=ServerPublic)
 async def stop_server(server_id, session: SessionDep):
     server = session.get(Server, server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
     sm = server_manager.servers[server.id]
     try:
         await sm.stop()
     except ServerWrongStateException as e:
-        server.state = ServerStateEnum.failed
-        session.add(server)
-        session.commit()
         raise HTTPException(status_code=400, detail=str(e))
     server.state = ServerStateEnum.stopped
     session.add(server)
@@ -181,6 +182,8 @@ async def stop_server(server_id, session: SessionDep):
 @router.post("/{server_id}/send_cmd")
 async def send_cmd_to_sever(server_id, session: SessionDep, cmd: SendCmdBody):
     server = session.get(Server, server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
     sm = server_manager.servers[server.id]
     try:
         await sm.send_cmd(cmd.cmd)
