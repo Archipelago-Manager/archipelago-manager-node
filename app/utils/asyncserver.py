@@ -122,8 +122,6 @@ class AsyncServer():
 
         else:
             # When outout stops, the server has stopped
-            if not self.err_task.done():
-                await self.err_task
             self.running = False
             self.starting = False
             self.subprocess = None
@@ -142,9 +140,6 @@ class AsyncServer():
                 coros = [func(sanitized_line) for _, func in
                          self.callback_manager.async_callbacks_err.items()]
                 asyncio.gather(*coros)
-        else:
-            if not self.read_task.done():
-                await self.read_task
 
     async def wait_for_startup(self):
         for _ in range(10):  # 0.5 * 10 = 5s
@@ -192,6 +187,7 @@ class AsyncServer():
         self.err_task = asyncio.create_task(self.consume_errors())
 
         self.add_stdin_callback("print", print)
+        self.add_stderr_callback("printe", lambda e: print(f"stderr: {e}"))
         self.add_stdin_callback("output",
                                 lambda x: self.output_lines.append(x))
         self.add_stdin_callback("start_cb", self.has_started_cb)
@@ -217,10 +213,17 @@ class AsyncServer():
                 "Not in a stoppable state (not running), "
                 f"current state: {db_state}"
                 ))
-        print(f"A-Server with id {self.server_id} shutting")
+        print(f"A-Server with id {self.server_id} shutting down")
         self.subprocess.stdin.write(str.encode("/exit\n"))
         await self.subprocess.stdin.drain()
+        self.remove_stdin_callback("print")
+        self.remove_stdin_callback("output")
+        self.remove_stderr_callback("printe")
         is_shut_down = await self.wait_for_shutdown()
+        self.read_task.cancel()
+        self.err_task.cancel()
+
+        # TODO: throw errors?
         if is_shut_down:
             print(f"A-Server with id {self.server_id} shut down")
         else:
