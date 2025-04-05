@@ -1,3 +1,4 @@
+import asyncio
 import pytest
 import httpx
 from pytest_httpx import HTTPXMock
@@ -157,6 +158,22 @@ async def test_start_server_already_started(client_teardown: TestClient,
     assert data["detail"] == "Not in a startable state, current state: running"
 
 
+def test_start_server_not_found(client_teardown: TestClient,
+                                session: Session):
+    server = create_random_initted_server(session)
+
+    body = {
+            "callback_url": "http://localhost/test",
+            "hub_id": 0,
+            "game_id": 0,
+            }
+    response = client_teardown.post(f"/servers/{server.id + 1}/start",
+                                    json=body)
+    data = response.json()
+    assert response.status_code == 404
+    assert data["detail"] == "Server not found"
+
+
 @pytest.mark.asyncio()
 async def test_start_server_not_initialized(client_teardown: TestClient,
                                             session: Session):
@@ -173,3 +190,53 @@ async def test_start_server_not_initialized(client_teardown: TestClient,
     assert data["detail"] == ("Server is not initialized, "
                               "call /server/{server_id}/init to "
                               "initialize.")
+
+
+@pytest.mark.asyncio()
+async def test_stop_server(client_teardown: TestClient, session: Session):
+    server = create_random_initted_server(session)
+
+    _ = await server_manager.servers[server.id].start_wait()
+    await asyncio.sleep(1)
+
+    response = client_teardown.post(f"/servers/{server.id}/stop")
+    data = response.json()
+    assert response.status_code == 200
+    assert data["state"] == ServerStateEnum.stopped
+
+
+def test_stop_server_wrong_id(client_teardown: TestClient,
+                              session: Session):
+    server = create_random_initted_server(session)
+
+    response = client_teardown.post(f"/servers/{server.id+1}/stop")
+    data = response.json()
+    assert response.status_code == 404
+    assert data["detail"] == "Server not found"
+
+
+@pytest.mark.asyncio()
+async def test_server_send_cmd(client_teardown: TestClient,
+                               session: Session):
+    server = create_random_initted_server(session)
+
+    _ = await server_manager.servers[server.id].start_wait()
+    await asyncio.sleep(1)
+
+    json = {"cmd": "/help"}
+    response = client_teardown.post(f"/servers/{server.id}/send_cmd",
+                                    json=json)
+    assert response.status_code == 200
+
+
+def test_server_send_cmd_not_started(client_teardown: TestClient,
+                                     session: Session):
+    server = create_random_initted_server(session)
+
+    json = {"cmd": "/help"}
+    response = client_teardown.post(f"/servers/{server.id}/send_cmd",
+                                    json=json)
+    data = response.json()
+    assert response.status_code == 404
+    assert data["detail"] == ("The process is not running, "
+                              "cannot send cmd")
