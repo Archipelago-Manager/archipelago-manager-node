@@ -112,7 +112,7 @@ def test_init_server_file_already_exists(client: TestClient, session: Session):
                               "to overwrite")
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio(loop_scope='session')
 async def test_start_server(client_teardown: TestClient, session: Session,
                             httpx_mock: HTTPXMock):
     server = create_random_initted_server(session)
@@ -140,7 +140,7 @@ async def test_start_server(client_teardown: TestClient, session: Session,
     assert started is True
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio(loop_scope='session')
 async def test_start_server_already_started(client_teardown: TestClient,
                                             session: Session):
     server = create_random_initted_server(session)
@@ -174,7 +174,7 @@ def test_start_server_not_found(client_teardown: TestClient,
     assert data["detail"] == "Server not found"
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio(loop_scope='session')
 async def test_start_server_not_initialized(client_teardown: TestClient,
                                             session: Session):
     server = create_random_server(session)
@@ -192,7 +192,7 @@ async def test_start_server_not_initialized(client_teardown: TestClient,
                               "initialize.")
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio(loop_scope='session')
 async def test_stop_server(client_teardown: TestClient, session: Session):
     server = create_random_initted_server(session)
 
@@ -215,7 +215,7 @@ def test_stop_server_wrong_id(client_teardown: TestClient,
     assert data["detail"] == "Server not found"
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio(loop_scope='session')
 async def test_server_send_cmd(client_teardown: TestClient,
                                session: Session):
     server = create_random_initted_server(session)
@@ -237,6 +237,6 @@ def test_server_send_cmd_not_started(client_teardown: TestClient,
     response = client_teardown.post(f"/servers/{server.id}/send_cmd",
                                     json=json)
     data = response.json()
-    assert response.status_code == 404
+    assert response.status_code == 400
     assert data["detail"] == ("The process is not running, "
                               "cannot send cmd")
