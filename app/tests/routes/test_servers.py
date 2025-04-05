@@ -215,6 +215,17 @@ def test_stop_server_wrong_id(client_teardown: TestClient,
     assert data["detail"] == "Server not found"
 
 
+def test_stop_server_wrong_state(client_teardown: TestClient,
+                                 session: Session):
+    server = create_random_initted_server(session)
+
+    response = client_teardown.post(f"/servers/{server.id}/stop")
+    data = response.json()
+    assert response.status_code == 400
+    assert data["detail"] == ("Not in a stoppable state (not running), "
+                              "current state: created")
+
+
 @pytest.mark.asyncio(loop_scope='session')
 async def test_server_send_cmd(client_teardown: TestClient,
                                session: Session):
@@ -240,3 +251,15 @@ def test_server_send_cmd_not_started(client_teardown: TestClient,
     assert response.status_code == 400
     assert data["detail"] == ("The process is not running, "
                               "cannot send cmd")
+
+
+def test_server_send_cmd_not_found(client_teardown: TestClient,
+                                   session: Session):
+    server = create_random_initted_server(session)
+
+    json = {"cmd": "/help"}
+    response = client_teardown.post(f"/servers/{server.id+1}/send_cmd",
+                                    json=json)
+    data = response.json()
+    assert response.status_code == 404
+    assert data["detail"] == "Server not found"
