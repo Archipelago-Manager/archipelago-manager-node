@@ -35,7 +35,7 @@ jobs:
       - name: debug print path opt
         run: ls /opt/Archipelago/
       - name: Add ArchipelagoServer to path
-        run: echo "export PATH=\$PATH:/opt/Archipelago/" >> $GITHUB_ENV
+        run: echo "export PATH=\$PATH:/opt/Archipelago/" >> $GITHUB_PATH
       - name: Run tests
         run: scripts/run_coverage.sh "Coverage for ${{ github.sha }}"
       - name: Store coverage files
