@@ -1,4 +1,7 @@
 # Archipelago Manger Node
+<a href="https://github.com/Archipelago-Manager/archipelago-manager-node/actions?query=workflow%3Apytest" target="_blank"><img src="https://github.com/Archipelago-Manager/archipelago-manager-node/actions/workflows/test.yml/badge.svg" alt="Test"></a>
+<a href="https://coverage-badge.samuelcolvin.workers.dev/redirect/Archipelago-Manager/archipelago-manager-node" target="_blank"><img src="https://coverage-badge.samuelcolvin.workers.dev/Archipelago-Manager/archipelago-manager-node.svg" alt="Coverage"></a>
+
 A server node running several [Archipelago](https://github.com/ArchipelagoMW/Archipelago) servers.
 Communicates with, and is separated from [Archipelago-Manager/archipelago-manager-backend](https://github.com/Archipelago-Manager/archipelago-manager-backend) because it will be more resource intensive and is made to be separatedly scalable.
 It is made to be called from the [archipelago-manager-backend](https://github.com/Archipelago-Manager/archipelago-manager-backend) but could theoretically be used stand-alone.
