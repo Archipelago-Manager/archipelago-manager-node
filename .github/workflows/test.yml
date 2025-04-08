@@ -24,6 +24,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install flake8 pytest
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: Download Archipelago
+        run: wget https://github.com/ArchipelagoMW/Archipelago/releases/download/0.6.0/Archipelago_0.6.0_linux-x86_64.tar.gz -O arch.tar.gz
+      - name: Extract Archipelago
+        uses: ihiroky/extract-action@v1
+        with:
+          file_path: arch.tar.gz
+      - name: Copy to path
+        run: cp -r Archipelago/ /opt/
+      - name: Add ArchipelagoServer start script
+        run: cp scripts/ArchipelagoServer /usr/bin/
       - name: Run tests
         run: scripts/run_coverage.sh "Coverage for ${{ github.sha }}"
       - name: Store coverage files
