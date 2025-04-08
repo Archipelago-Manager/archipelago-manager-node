@@ -32,6 +32,10 @@ jobs:
           file_path: arch.tar.gz
       - name: Copy to path
         run: cp -r Archipelago/ /opt/
+      - name: debug print path
+        run: ls Archipelago
+      - name: debug print path opt
+        run: ls /opt/
       - name: Add ArchipelagoServer to path
         run: echo "export PATH=\$PATH:/opt/" >> $GITHUB_ENV
       - name: Run tests
