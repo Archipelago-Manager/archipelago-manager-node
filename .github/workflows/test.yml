@@ -10,7 +10,7 @@ on:
       - synchronize
 
 jobs:
-  test-backend:
+  test-node:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -32,8 +32,8 @@ jobs:
           file_path: arch.tar.gz
       - name: Copy to path
         run: cp -r Archipelago/ /opt/
-      - name: Add ArchipelagoServer start script
-        run: cp scripts/ArchipelagoServer /usr/bin/
+      - name: Add ArchipelagoServer to path
+        run: echo "export PATH=\$PATH:/opt/" >> $GITHUB_ENV
       - name: Run tests
         run: scripts/run_coverage.sh "Coverage for ${{ github.sha }}"
       - name: Store coverage files
