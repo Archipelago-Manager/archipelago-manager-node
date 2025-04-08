@@ -188,5 +188,6 @@ pip-selfcheck.json
 # End of https://www.toptal.com/developers/gitignore/api/python,venv
 *.db
 *.archipelago
+!test_files/*.archipelago
 *.apsave
 arch_games_dev/
